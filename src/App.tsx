@@ -12,6 +12,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import ScanPage from "@/pages/ScanPage";
 import ScanResultPage from "@/pages/ScanResultPage";
 import HistoryPage from "@/pages/HistoryPage";
+
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -35,6 +36,7 @@ const App = () => (
                 <Route path="/scan" element={<ScanPage />} />
                 <Route path="/scan-result/:scanId" element={<ScanResultPage />} />
                 <Route path="/history" element={<HistoryPage />} />
+               
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

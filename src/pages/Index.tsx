@@ -55,8 +55,8 @@ const Index = () => {
             <div className="w-72 h-72 md:w-96 md:h-96 mx-auto bg-primary/20 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse"></div>
             <div className="w-64 h-64 md:w-80 md:h-80 mx-auto bg-primary/10 blur-2xl absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full"></div>
             <img 
-              src="https://www.svgrepo.com/show/416851/allergy-allergen-allergic.svg" 
-              alt="App Preview" 
+              src="/logo.png"
+              alt="Logo" 
               className="w-80 h-80 md:w-[450px] md:h-[450px] relative z-10 mx-auto animate-float"
             />
           </div>

@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Scan, User, List, LogOut } from "lucide-react";
+import { Scan, User, List, LogOut, Search } from "lucide-react";
 
 const NavBar = () => {
   const { pathname } = useLocation();
@@ -11,6 +11,7 @@ const NavBar = () => {
   
   const navItems = [
     { path: "/scan", label: "Scan", icon: <Scan className="w-5 h-5" /> },
+    
     { path: "/profile", label: "Profile", icon: <User className="w-5 h-5" /> },
     { path: "/history", label: "History", icon: <List className="w-5 h-5" /> },
   ];

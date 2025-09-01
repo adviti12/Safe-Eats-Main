@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import auth from "../middleware/auth.js";
-import { sendWelcomeEmail } from "../emailService.js";
+import { sendWelcomeEmail, sendLoginEmail, sendAllergenUpdateEmail } from "../emailService.js";
 
 const router = express.Router();
 
@@ -20,8 +20,8 @@ router.post("/register", async (req, res) => {
     const newUser = new User({ name, email, password: hashed });
     await newUser.save();
 
-    // Send welcome email (don't wait for it to avoid delaying response)
-    sendWelcomeEmail(email).catch(err => console.error('Email sending failed:', err));
+    // Send welcome email with username (don't wait for it to avoid delaying response)
+    sendWelcomeEmail(email, name).catch(err => console.error('Email sending failed:', err));
 
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
     res.status(201).json({
@@ -44,8 +44,8 @@ router.post("/login", async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
 
-    // Send welcome email on login (don't wait for it to avoid delaying response)
-    sendWelcomeEmail(user.email).catch(err => console.error('Email sending failed:', err));
+    // Send login notification email (don't wait for it to avoid delaying response)
+    sendLoginEmail(user.email, user.name).catch(err => console.error('Email sending failed:', err));
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
     res.json({
@@ -76,8 +76,27 @@ router.put("/profile", auth, async (req, res) => {
     if (typeof req.body.name === "string") updates.name = req.body.name;
     if (Array.isArray(req.body.allergies)) updates.allergies = req.body.allergies;
 
+    // Get the user before update to check if allergies changed
+    const userBeforeUpdate = await User.findById(req.userId).select("-password");
+
     const user = await User.findByIdAndUpdate(req.userId, updates, { new: true }).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Send allergen update email if allergies were updated
+    if (Array.isArray(req.body.allergies) && userBeforeUpdate) {
+      const oldAllergies = userBeforeUpdate.allergies || [];
+      const newAllergies = req.body.allergies;
+
+      // Check if allergies actually changed
+      const allergiesChanged = JSON.stringify(oldAllergies.sort()) !== JSON.stringify(newAllergies.sort());
+
+      if (allergiesChanged && newAllergies.length > 0) {
+        sendAllergenUpdateEmail(user.email, user.name, newAllergies).catch(err =>
+          console.error('Allergen update email sending failed:', err)
+        );
+      }
+    }
+
     res.json(user);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -89,6 +108,9 @@ router.patch("/me", auth, async (req, res) => {
   try {
     const { name, allergies } = req.body;
 
+    // Get the user before update to check if allergies changed
+    const userBeforeUpdate = await User.findById(req.userId).select("-password");
+
     // Build update object only with allowed fields
     const updates = {};
     if (typeof name === "string") updates.name = name;
@@ -97,6 +119,21 @@ router.patch("/me", auth, async (req, res) => {
     // Update and return the updated user (without password)
     const user = await User.findByIdAndUpdate(req.userId, updates, { new: true }).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Send allergen update email if allergies were updated
+    if (Array.isArray(allergies) && userBeforeUpdate) {
+      const oldAllergies = userBeforeUpdate.allergies || [];
+      const newAllergies = allergies;
+
+      // Check if allergies actually changed
+      const allergiesChanged = JSON.stringify(oldAllergies.sort()) !== JSON.stringify(newAllergies.sort());
+
+      if (allergiesChanged && newAllergies.length > 0) {
+        sendAllergenUpdateEmail(user.email, user.name, newAllergies).catch(err =>
+          console.error('Allergen update email sending failed:', err)
+        );
+      }
+    }
 
     // Return the updated user object (frontend expects either res.data or res.data.user)
     return res.json(user);

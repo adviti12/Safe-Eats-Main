@@ -97,10 +97,10 @@ const ScanPage = () => {
       
       // Process the text for ingredients and allergens
       if (currentUser?.allergies && currentUser.allergies.length > 0) {
-        const { ingredients, warnings } = processTextForAllergens(extractedText, currentUser.allergies);
+        const { ingredients, warnings } = await processTextForAllergens(extractedText, currentUser.allergies);
         setParsedIngredients(ingredients);
         setWarnings(warnings);
-        
+
         if (warnings.length > 0) {
           setShowWarning(true);
         }
@@ -223,10 +223,10 @@ const ScanPage = () => {
         setDetectedText(extractedText);
         
         if (currentUser.allergies && currentUser.allergies.length > 0) {
-          const { ingredients, warnings } = processTextForAllergens(extractedText, currentUser.allergies);
+          const { ingredients, warnings } = await processTextForAllergens(extractedText, currentUser.allergies);
           setParsedIngredients(ingredients);
           setWarnings(warnings);
-          
+
           if (warnings.length > 0 && !showWarning) {
             setShowWarning(true);
           }
