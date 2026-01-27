@@ -1,4 +1,4 @@
-# Welcome to SafeEats
+# Welcome to SafeEats.
 
 
 ## What technologies are used for this project?
