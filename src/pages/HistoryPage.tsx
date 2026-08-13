@@ -13,18 +13,26 @@ const HistoryPage = () => {
   useEffect(() => {
     if (!currentUser) return;
     
-    const fetchScans = () => {
-      const userScans = getUserScans(currentUser.id);
-      setScans(userScans);
+    const fetchScans = async () => {
+      try {
+        const userScans = await getUserScans(currentUser.id);
+        setScans(userScans);
+      } catch (err) {
+        console.error("Error fetching scans", err);
+      }
     };
     
     fetchScans();
   }, [currentUser]);
 
-  const handleDelete = (scanId: string) => {
+  const handleDelete = async (scanId: string) => {
     if (window.confirm("Are you sure you want to delete this scan?")) {
-      deleteScan(scanId); // Assuming you have a deleteScan function in scanService
-      setScans((prev) => prev.filter((scan) => scan.id !== scanId));
+      try {
+        await deleteScan(scanId);
+        setScans((prev) => prev.filter((scan) => scan.id !== scanId));
+      } catch (err) {
+        console.error("Failed to delete scan", err);
+      }
     }
   };
 

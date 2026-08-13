@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("token", token);
 
     const normalized: User = {
-      id: user.id,
+      id: user.id || user._id,
       name: user.name,
       email: user.email,
       allergies: user.allergies ?? [],
@@ -100,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("token", token);
 
     const normalized: User = {
-      id: user.id,
+      id: user.id || user._id,
       name: user.name,
       email: user.email,
       allergies: user.allergies ?? [],
@@ -138,11 +138,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (res && res.data && (res.data.user || res.data.name)) {
         const apiUser = res.data.user ?? res.data;
         const normalized: User = {
-          id: apiUser.id ?? merged.id,
-          name: apiUser.name ?? merged.name,
-          email: apiUser.email ?? merged.email,
-          allergies: apiUser.allergies ?? merged.allergies ?? [],
-          emergencyContact: apiUser.emergencyContact ?? merged.emergencyContact ?? "",
+          id: apiUser.id || apiUser._id || merged.id,
+          name: apiUser.name || merged.name,
+          email: apiUser.email || merged.email,
+          allergies: apiUser.allergies || merged.allergies,
+          emergencyContact: apiUser.emergencyContact || merged.emergencyContact,
         };
         setCurrentUser(normalized);
         return normalized;

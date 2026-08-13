@@ -11,9 +11,74 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const router = express.Router();
 
-// Initialize Groq client
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY,
+});
+
+// Clean text using Groq API
+router.post('/clean-text', async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text) {
+      return res.status(400).json({
+        error: 'Text is required'
+      });
+    }
+
+    console.log('🚀 Starting text cleaning with raw text:', text);
+
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert at cleaning and formatting ingredient lists from product labels. Your task is to:
+
+1. Extract only the ingredients from the messy OCR text
+2. Remove ALL percentage values (like "5%", "10.5%") but KEEP brackets containing synonyms, sources, or multiple items
+3. For brackets with multiple items like "acidity regulators(22,33)": TREAT EACH NUMBER AS A SEPARATE INGREDIENT (e.g., "acidity regulator 22", "acidity regulator 33")
+4. For source brackets like "(from milk)": KEEP them with the ingredient (e.g., "protein (from milk)")
+5. Remove ALL garbage characters, symbols, and non-ingredient text EXCEPT meaningful brackets
+6. Use fuzzy logic to correct misspelled ingredient names to their closest valid food ingredient - be flexible with spelling variations and OCR errors
+7. Fix compound words: separate run-together words like 'riceflour' to 'rice flour', 'wholewheat' to 'whole wheat'
+8. SEPARATE INGREDIENTS BASED ON COMMAS - each comma indicates a new ingredient
+9. Format output as ONE INGREDIENT PER LINE WITHOUT COMMA
+10. Each ingredient should be properly spaced multi-word names (e.g., "brown sugar", "baking soda")
+11. Keep source information together: if an ingredient has (from source) keep them as one line
+12. Only include actual food ingredients - remove codes, numbers, symbols, and irrelevant text
+13. Normalize capitalization to title case (first letter of each word capitalized)
+
+Return ONLY the cleaned ingredient list with each ingredient on its own line. No explanations, no headers, no extra text.`
+        },
+        {
+          role: 'user',
+          content: `Clean this OCR text and extract only valid ingredients. IMPORTANT: Separate ingredients based on commas - each comma indicates a new ingredient.
+
+${text}
+
+Output format: Each ingredient on separate line, properly spaced, title case. Keep brackets for source information and synonyms.`
+        },
+      ],
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: 1000,
+      temperature: 0.1,
+    });
+
+    const cleanedText = completion.choices[0]?.message?.content?.trim() || text;
+    console.log('✅ Text cleaning completed. Cleaned:', cleanedText);
+
+    res.json({
+      success: true,
+      cleanedText: cleanedText
+    });
+
+  } catch (error) {
+    console.error('❌ Text cleaning error:', error);
+    res.status(500).json({
+      error: 'Failed to clean text',
+      details: error.message
+    });
+  }
 });
 
 // Analyze health benefits of ingredients

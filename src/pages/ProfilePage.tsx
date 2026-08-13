@@ -31,6 +31,8 @@ const ProfilePage = () => {
   const [emergencyContact, setEmergencyContact] = useState<string>(
     currentUser?.emergencyContact || ""
   );
+  const [name, setName] = useState<string>(currentUser?.name || "");
+  const [email, setEmail] = useState<string>(currentUser?.email || "");
   const [loading, setLoading] = useState(false);
 
   // search state
@@ -42,6 +44,9 @@ const ProfilePage = () => {
   // Keep selectedAllergies in sync when currentUser loads/changes
   useEffect(() => {
     setSelectedAllergies(currentUser?.allergies || []);
+    setName(currentUser?.name || "");
+    setEmail(currentUser?.email || "");
+    setEmergencyContact(currentUser?.emergencyContact || "");
   }, [currentUser]);
 
   // debounce helper
@@ -98,7 +103,7 @@ const ProfilePage = () => {
         new Set(selectedAllergies.map((s) => (s || "").trim()))
       ).filter(Boolean);
 
-      await updateUser({ allergies: normalized, emergencyContact });
+      await updateUser({ allergies: normalized, emergencyContact, name, email });
       toast.success("Profile updated successfully!");
     } catch (error) {
       console.error("Save profile error", error);
@@ -138,10 +143,38 @@ const ProfilePage = () => {
                 <UserIcon className="w-10 h-10 text-primary" />
               </div>
               <CardContent className="pt-14 pb-6 px-0">
-                <h2 className="text-xl font-bold">{currentUser.name}</h2>
-                <div className="flex items-center gap-2 text-gray-500 mt-1">
-                  <Mail className="w-4 h-4" />
-                  <span className="text-sm">{currentUser.email}</span>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name" className="text-sm font-medium">Name</Label>
+                    <div className="relative mt-1">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <UserIcon className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <Input
+                        id="name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="pl-10 font-bold"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                    <div className="relative mt-1">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <Mail className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 text-gray-600"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-2 mt-4">
                   <Label htmlFor="emergencyContact" className="text-sm font-medium">Emergency Contact</Label>
@@ -192,7 +225,7 @@ const ProfilePage = () => {
                     placeholder="Search by name, food, dye, etc."
                     className="w-full mt-2 p-2 border rounded-md"
                   />
-                  {suggestions.length > 0 && (
+                  {query.trim().length > 0 && (
                     <div className="mt-2 bg-white border rounded-md max-h-48 overflow-auto z-50">
                       {suggestions.map((s) => (
                         <div
@@ -214,6 +247,19 @@ const ProfilePage = () => {
                           </div>
                         </div>
                       ))}
+                      
+                      <div
+                        className="p-3 hover:bg-gray-100 flex justify-between items-center cursor-pointer border-t border-gray-100 bg-lavender-50"
+                        onClick={() => handleAddSuggestion(query.trim())}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium text-primary">Add "{query.trim()}"</div>
+                          <div className="text-xs text-gray-500">Custom AI keyword search</div>
+                        </div>
+                        <div className="text-sm text-primary ml-3 font-semibold">
+                          Add
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -263,7 +309,7 @@ const ProfilePage = () => {
                   ) : (
                     <div className="flex items-center justify-center">
                       <Save className="w-5 h-5 mr-2" />
-                      Save Allergies
+                      Save Profile
                     </div>
                   )}
                 </Button>

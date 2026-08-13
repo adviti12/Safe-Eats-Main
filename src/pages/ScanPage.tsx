@@ -18,12 +18,10 @@ import { createWorker } from 'tesseract.js';
 const ScanPage = () => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [detectedText, setDetectedText] = useState<string>("");
   const [parsedIngredients, setParsedIngredients] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [showWarning, setShowWarning] = useState(false);
-  const [scanInterval, setScanInterval] = useState<number | null>(null);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [uploadHover, setUploadHover] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -154,12 +152,7 @@ const ScanPage = () => {
       }
     }
     
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      setScanInterval(null);
-    }
-    
-    setScanning(false);
+    // Realtime scanning removed
   };
 
   // Take a photo for web
@@ -180,69 +173,6 @@ const ScanPage = () => {
       // Process the captured image with OCR
       processOCROnImage(imageDataUrl);
     }
-  };
-
-  // Start real-time OCR scanning
-  const startRealtimeScanning = () => {
-    if (!videoRef.current || !canvasRef.current || !currentUser) return;
-    
-    setScanning(true);
-    
-    // Set a longer interval (3 seconds) to give time for OCR processing
-    const interval = window.setInterval(async () => {
-      if (!videoRef.current || !canvasRef.current || !currentUser || loading) return;
-      
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) return;
-      
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      
-      const imageDataUrl = canvas.toDataURL("image/jpeg");
-      
-      // Process frame with OCR - lightweight mode for real-time
-      setLoading(true);
-      try {
-        const worker = await createWorker();
-        await worker.loadLanguage('eng');
-        await worker.initialize('eng');
-        
-        // Configure worker to improve OCR for product labels
-        await worker.setParameters({
-          tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.():;%-_\'"/&',
-          preserve_interword_spaces: '1',
-        });
-        
-        const result = await worker.recognize(imageDataUrl);
-        await worker.terminate();
-        
-        const extractedText = result.data.text || "";
-        setDetectedText(extractedText);
-        
-        if (currentUser.allergies && currentUser.allergies.length > 0) {
-          const { ingredients, warnings } = await processTextForAllergens(extractedText, currentUser.allergies);
-          setParsedIngredients(ingredients);
-          setWarnings(warnings);
-
-          if (warnings.length > 0 && !showWarning) {
-            setShowWarning(true);
-          }
-        }
-      } catch (error) {
-        console.error('Error in real-time scanning:', error);
-      } finally {
-        setLoading(false);
-      }
-    }, 3000); // Reduced frequency for better performance
-    
-    setScanInterval(interval);
-    
-    return () => {
-      clearInterval(interval);
-    };
   };
 
   // Unified capture function
@@ -270,28 +200,18 @@ const ScanPage = () => {
   const processImage = async () => {
     if (!capturedImage || !currentUser) return;
     
+    if (parsedIngredients.length === 0) {
+      toast.error("Invalid image or no ingredients found. Please try again with a clearer image.");
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await saveScan(currentUser.id, capturedImage, currentUser.allergies);
       navigate(`/scan-result/${result.id}`);
-    } catch (error) {
-      toast.error("Failed to process image. Please try again.");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to process image. Please try again.");
       setLoading(false);
-    }
-  };
-
-  // Toggle real-time scanning
-  const toggleRealtimeScanning = () => {
-    if (scanning) {
-      // Stop scanning
-      if (scanInterval) {
-        clearInterval(scanInterval);
-        setScanInterval(null);
-      }
-      setScanning(false);
-    } else {
-      // Start scanning
-      startRealtimeScanning();
     }
   };
 
@@ -402,28 +322,7 @@ const ScanPage = () => {
                   </div>
                 )}
                 
-                {!isNative && scanning && (
-                  <div className="absolute inset-0 border-4 border-primary/50 rounded-t-2xl z-10">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-primary animate-pulse"></div>
-                  </div>
-                )}
-                
                 <div className={`${isNative ? '' : 'absolute bottom-6'} left-0 right-0 flex justify-center gap-4`}>
-                  {!isNative && (
-                    <Button
-                      onClick={toggleRealtimeScanning}
-                      variant="secondary"
-                      size="icon"
-                      className={`rounded-full w-12 h-12 ${scanning ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'} text-white shadow-lg hover:shadow-xl`}
-                    >
-                      {scanning ? (
-                        <X className="w-6 h-6 text-white" />
-                      ) : (
-                        <AlertTriangle className="w-6 h-6 text-white" />
-                      )}
-                    </Button>
-                  )}
-                  
                   <Button
                     onClick={capturePhoto}
                     variant="secondary"
@@ -452,13 +351,7 @@ const ScanPage = () => {
                 </div>
               </div>
               
-              {/* Real-time detected text display */}
-              {!isNative && scanning && detectedText && (
-                <div className="absolute bottom-24 left-4 right-4 bg-black/70 text-white p-3 rounded-lg backdrop-blur-sm max-h-40 overflow-auto">
-                  <h3 className="text-xs uppercase mb-1 opacity-70">Detected Text:</h3>
-                  <p className="text-sm">{detectedText}</p>
-                </div>
-              )}
+              {/* Real-time scanning display removed */}
             </div>
           ) : (
             // Captured image view

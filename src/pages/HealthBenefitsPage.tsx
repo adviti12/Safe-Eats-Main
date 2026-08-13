@@ -8,6 +8,7 @@ import { getScan, ScanResult } from "@/services/scanService";
 import { toast } from "sonner";
 import { ArrowLeft, AlertTriangle, CheckCircle, Heart, X, TrendingUp, TrendingDown } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import API from "@/services/api";
 
 interface HealthAnalysis {
   ingredient: string;
@@ -26,18 +27,16 @@ const HealthBenefitsPage = () => {
   useEffect(() => {
     if (!scanId) return;
 
-    const fetchScan = () => {
+    const fetchScan = async () => {
       try {
-        const result = getScan(scanId);
+        const result = await getScan(scanId);
         if (!result) {
           toast.error("Scan not found");
           return;
         }
 
-        if (result.userId !== currentUser?.id) {
-          toast.error("You don't have permission to view this scan");
-          return;
-        }
+        // The backend already verifies ownership in the database query.
+        // If we get a result here, it belongs to the logged-in user.
 
         setScan(result);
       } catch (error) {
@@ -55,24 +54,14 @@ const HealthBenefitsPage = () => {
 
     setAnalyzing(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/health-benefits/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ingredients: scan.ingredients,
-        }),
+      const response = await API.post('/health-benefits/analyze', {
+        ingredients: scan.ingredients
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to analyze health benefits');
-      }
-
-      const data = await response.json();
-      setHealthAnalysis(data.analysis);
+      
+      setHealthAnalysis(response.data.analysis);
+      toast.success("Analysis complete");
     } catch (error) {
-      console.error('Error analyzing health benefits:', error);
+      console.error("Analysis failed:", error);
       toast.error("Failed to analyze health benefits");
     } finally {
       setAnalyzing(false);

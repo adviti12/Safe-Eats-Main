@@ -1,73 +1,27 @@
 
 // Mock database for scan history
 import { createWorker } from 'tesseract.js';
-import Groq from 'groq-sdk';
+import API from './api';
 
-const SCAN_HISTORY_KEY = "allergen-detector-scan-history";
 
-// Initialize Groq client
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true,
-});
 
-// Clean text using Groq API
+// Clean text using backend Groq API
 export const cleanTextWithGroq = async (rawText: string): Promise<string> => {
-  console.log('🚀 Starting Groq text cleaning with raw text:', rawText);
+  console.log('🚀 Starting text cleaning with raw text:', rawText);
 
   try {
-    const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-    console.log('🔑 Groq API Key exists:', !!apiKey);
-
-    if (!apiKey) {
-      console.error('❌ Groq API key not found in environment variables');
-      return rawText; // Fallback to original text
-    }
-
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert at cleaning and formatting ingredient lists from product labels. Your task is to:
-
-1. Extract only the ingredients from the messy OCR text
-2. Remove ALL percentage values (like "5%", "10.5%") but KEEP brackets containing synonyms, sources, or multiple items
-3. For brackets with multiple items like "acidity regulators(22,33)": TREAT EACH NUMBER AS A SEPARATE INGREDIENT (e.g., "acidity regulator 22", "acidity regulator 33")
-4. For source brackets like "(from milk)": KEEP them with the ingredient (e.g., "protein (from milk)")
-5. Remove ALL garbage characters, symbols, and non-ingredient text EXCEPT meaningful brackets
-6. Use fuzzy logic to correct misspelled ingredient names to their closest valid food ingredient - be flexible with spelling variations and OCR errors
-7. Fix compound words: separate run-together words like 'riceflour' to 'rice flour', 'wholewheat' to 'whole wheat'
-8. SEPARATE INGREDIENTS BASED ON COMMAS - each comma indicates a new ingredient
-9. Format output as ONE INGREDIENT PER LINE WITHOUT COMMA
-10. Each ingredient should be properly spaced multi-word names (e.g., "brown sugar", "baking soda")
-11. Keep source information together: if an ingredient has (from source) keep them as one line
-12. Only include actual food ingredients - remove codes, numbers, symbols, and irrelevant text
-13. Normalize capitalization to title case (first letter of each word capitalized)
-
-Return ONLY the cleaned ingredient list with each ingredient on its own line. No explanations, no headers, no extra text.`,
-        },
-        {
-          role: 'user',
-          content: `Clean this OCR text and extract only valid ingredients. IMPORTANT: Separate ingredients based on commas - each comma indicates a new ingredient.
-
-${rawText}
-
-Output format: Each ingredient on separate line, properly spaced, title case. Keep brackets for source information and synonyms.`,
-        },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 1000,
-      temperature: 0.1,
+    const response = await API.post('/health-benefits/clean-text', {
+      text: rawText,
     });
 
-    const cleanedText = completion.choices[0]?.message?.content?.trim() || rawText;
-    console.log('✅ Groq cleaning completed. Original:', rawText);
-    console.log('✅ Groq cleaning completed. Cleaned:', cleanedText);
+    const cleanedText = response.data?.cleanedText || rawText;
+    console.log('✅ Text cleaning completed. Original:', rawText);
+    console.log('✅ Text cleaning completed. Cleaned:', cleanedText);
 
     return cleanedText;
   } catch (error) {
-    console.error('❌ Error cleaning text with Groq:', error);
-    console.error('❌ Error details:', error.message);
+    console.error('❌ Error cleaning text:', error);
+    console.error('❌ Error details:', error instanceof Error ? error.message : String(error));
     return rawText; // Fallback to original text
   }
 };
@@ -82,15 +36,15 @@ export interface ScanResult {
   warnings: string[];
 }
 
-// Get scan history from localStorage
-const getScanHistory = (): ScanResult[] => {
-  const history = localStorage.getItem(SCAN_HISTORY_KEY);
-  return history ? JSON.parse(history) : [];
-};
-
-// Save scan history to localStorage
-const saveScanHistory = (history: ScanResult[]): void => {
-  localStorage.setItem(SCAN_HISTORY_KEY, JSON.stringify(history));
+// Get scan history from API
+const getScanHistory = async (): Promise<ScanResult[]> => {
+  try {
+    const res = await API.get('/scans');
+    return res.data;
+  } catch (error) {
+    console.error("Failed to fetch scan history:", error);
+    return [];
+  }
 };
 
 // Extract text from an image using Tesseract.js
@@ -98,23 +52,23 @@ export const extractTextFromImage = async (imageUrl: string): Promise<string> =>
   try {
     // Create a new worker
     const worker = await createWorker();
-    
+
     // Load language data
     await worker.loadLanguage('eng');
     await worker.initialize('eng');
-    
+
     // Configure worker to improve OCR for product labels
     await worker.setParameters({
       tessedit_char_whitelist: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.():;%-_\'"/&',
       preserve_interword_spaces: '1',
     });
-    
+
     // Recognize text in image
     const result = await worker.recognize(imageUrl);
-    
+
     // Terminate the worker
     await worker.terminate();
-    
+
     return result.data.text || "";
   } catch (error) {
     console.error("OCR Error:", error);
@@ -250,10 +204,10 @@ function splitIngredientsWithParentheses(text: string): string[] {
   const ingredients: string[] = [];
   let currentIngredient = '';
   let inParentheses = 0;
-  
+
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    
+
     if (char === '(') {
       inParentheses++;
       currentIngredient += char;
@@ -269,19 +223,19 @@ function splitIngredientsWithParentheses(text: string): string[] {
       currentIngredient += char;
     }
   }
-  
+
   // Add the last ingredient if any
   if (currentIngredient.trim()) {
     ingredients.push(currentIngredient.trim());
   }
-  
+
   return ingredients;
 }
 
 // Check for allergens in ingredients with better detection
 export const checkForAllergens = (ingredients: string[], userAllergies: string[]): string[] => {
   const warnings: string[] = [];
-  
+
   // Enhanced allergen mapping for better detection
   const allergenMap: Record<string, string[]> = {
     "wheat": ["wheat", "flour", "gluten", "enriched flour", "wheat flour"],
@@ -298,29 +252,29 @@ export const checkForAllergens = (ingredients: string[], userAllergies: string[]
 
   userAllergies.forEach(allergy => {
     const allergenTerms = allergenMap[allergy.toLowerCase()] || [allergy.toLowerCase()];
-    
+
     const found = ingredients.some(ingredient =>
       allergenTerms.some(term => ingredient.toLowerCase().includes(term))
     );
-    
+
     if (found) {
       warnings.push(`Contains ${allergy}`);
     }
   });
-  
+
   return warnings;
 };
 
 // Process text for real-time allergen detection
-export const processTextForAllergens = async (text: string, userAllergies: string[]): Promise<{
+export const processTextForAllergens = async (text: string, userAllergies: string[], useGroq: boolean = true): Promise<{
   ingredients: string[],
   warnings: string[]
 }> => {
-  console.log('🔬 Starting processTextForAllergens with:', { text, userAllergies });
+  console.log('🔬 Starting processTextForAllergens with:', { text, userAllergies, useGroq });
 
-  // First clean the text with Groq for better results
-  const cleanedText = await cleanTextWithGroq(text);
-  console.log('🧽 Text after Groq cleaning:', cleanedText);
+  // First clean the text with Groq for better results (if requested)
+  const cleanedText = useGroq ? await cleanTextWithGroq(text) : text;
+  console.log('🧽 Text after cleaning phase:', cleanedText);
 
   // Parse ingredients from cleaned text
   const ingredients = parseIngredients(cleanedText);
@@ -352,42 +306,52 @@ export const saveScan = async (
   const ingredients = parseIngredients(cleanedText);
 
   // Check for allergens
-  const warnings = checkForAllergens(ingredients, userAllergies);
+  const warnings = checkForAllergens(ingredients, userAllergies || []);
 
-  // Create the scan result
-  const scanResult: ScanResult = {
-    id: Date.now().toString(),
-    userId,
-    timestamp: Date.now(),
-    imageUrl,
-    extractedText: cleanedText, // Use cleaned text
-    ingredients,
-    warnings,
-  };
+  // Make API call to save scan to MongoDB (which will also handle S3 upload for the image)
+  try {
+    const response = await API.post('/scans', {
+      imageUrl,
+      extractedText: cleanedText,
+      ingredients,
+      warnings
+    });
 
-  // Add to history
-  const history = getScanHistory();
-  history.push(scanResult);
-  saveScanHistory(history);
-
-  return scanResult;
+    return response.data;
+  } catch (error) {
+    console.error("Failed to save scan to backend:", error);
+    throw error;
+  }
 };
 
 // Get scan history for a user
-export const getUserScans = (userId: string): ScanResult[] => {
-  const history = getScanHistory();
-  return history.filter(scan => scan.userId === userId).sort((a, b) => b.timestamp - a.timestamp);
+export const getUserScans = async (userId: string): Promise<ScanResult[]> => {
+  try {
+    const res = await API.get('/scans');
+    return res.data;
+  } catch (error) {
+    console.error("Failed to fetch scan history:", error);
+    return [];
+  }
 };
 
 // Get a specific scan
-export const getScan = (scanId: string): ScanResult | null => {
-  const history = getScanHistory();
-  return history.find(scan => scan.id === scanId) || null;
+export const getScan = async (scanId: string): Promise<ScanResult | null> => {
+  try {
+    const res = await API.get(`/scans/${scanId}`);
+    return res.data;
+  } catch (error) {
+    console.error("Failed to fetch scan:", error);
+    return null;
+  }
 };
 
 // Delete a scan by ID
-export const deleteScan = (scanId: string): void => {
-  const history = getScanHistory();
-  const updatedHistory = history.filter(scan => scan.id !== scanId);
-  saveScanHistory(updatedHistory);
+export const deleteScan = async (scanId: string): Promise<void> => {
+  try {
+    await API.delete(`/scans/${scanId}`);
+  } catch (error) {
+    console.error("Failed to delete scan:", error);
+    throw error;
+  }
 };

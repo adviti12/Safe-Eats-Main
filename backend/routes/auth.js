@@ -11,13 +11,19 @@ const router = express.Router();
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, emergencyContact } = req.body;
+    const { name, email, password, emergencyContact, allergies } = req.body;
     if (!name || !email || !password || !emergencyContact) return res.status(400).json({ message: "Missing fields" });
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: "User already exists" });
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
-    const newUser = new User({ name, email, password: hashed, emergencyContact });
+    const newUser = new User({ 
+      name, 
+      email, 
+      password: hashed, 
+      emergencyContact,
+      allergies: Array.isArray(allergies) ? allergies : []
+    });
     await newUser.save();
 
     // Send welcome email with username (don't wait for it to avoid delaying response)
@@ -104,23 +110,32 @@ router.put("/profile", auth, async (req, res) => {
   }
 });
 
-// PATCH /api/auth/me  -- update name, allergies, and emergencyContact (protected)
+// PATCH /api/auth/me  -- update name, email, allergies, and emergencyContact (protected)
 router.patch("/me", auth, async (req, res) => {
   try {
-    const { name, allergies, emergencyContact } = req.body;
+    const { name, email, allergies, emergencyContact } = req.body;
 
     // Get the user before update to check if allergies changed
     const userBeforeUpdate = await User.findById(req.userId).select("-password");
+    if (!userBeforeUpdate) return res.status(404).json({ message: "User not found" });
 
     // Build update object only with allowed fields
     const updates = {};
-    if (typeof name === "string") updates.name = name;
-    if (Array.isArray(allergies)) updates.allergies = allergies;
+    if (typeof name === "string" && name.trim() !== "") updates.name = name.trim();
     if (typeof emergencyContact === "string") updates.emergencyContact = emergencyContact;
+    if (Array.isArray(allergies)) updates.allergies = allergies;
+    
+    // Check email uniqueness before updating
+    if (typeof email === "string" && email.trim() !== "" && email.trim().toLowerCase() !== userBeforeUpdate.email) {
+      const existingEmail = await User.findOne({ email: email.trim().toLowerCase() });
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email is already in use by another account" });
+      }
+      updates.email = email.trim().toLowerCase();
+    }
 
     // Update and return the updated user (without password)
     const user = await User.findByIdAndUpdate(req.userId, updates, { new: true }).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
 
     // Send allergen update email if allergies were updated
     if (Array.isArray(allergies) && userBeforeUpdate) {
@@ -141,6 +156,10 @@ router.patch("/me", auth, async (req, res) => {
     return res.json(user);
   } catch (err) {
     console.error("PATCH /api/auth/me error:", err);
+    // Handle mongoose duplicate key error fallback
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "Email is already in use" });
+    }
     return res.status(500).json({ message: err.message });
   }
 });

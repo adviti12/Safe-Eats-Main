@@ -24,18 +24,16 @@ const ScanResultPage = () => {
   useEffect(() => {
     if (!scanId) return;
 
-    const fetchScan = () => {
+    const fetchScan = async () => {
       try {
-        const result = getScan(scanId);
+        const result = await getScan(scanId);
         if (!result) {
           toast.error("Scan not found");
           return;
         }
 
-        if (result.userId !== currentUser?.id) {
-          toast.error("You don't have permission to view this scan");
-          return;
-        }
+        // The backend already verifies ownership in the database query.
+        // If we get a result here, it belongs to the logged-in user.
 
         setScan(result);
 
